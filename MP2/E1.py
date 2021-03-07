@@ -18,7 +18,7 @@ def MyCCorrelation_201630945_201632096(image, kernel, boundary_condition):
     # Transforms the image and kernel into a Numpy array to avoid index issues.
     img = np.asarray(image)
     ker = np.asarray(kernel)
-    # Imagen M x N, mask m x n.
+    # Image M x N, mask m x n.
     M, N = np.size(img, 0), np.size(img, 1)
     m, n = np.size(ker, 0), np.size(ker, 1)
     # Result is the same size as the image.
@@ -125,7 +125,7 @@ fig.suptitle('Imagen original y resultado de cross-correlación con dos kernels'
 roses_kern_a = MyCCorrelation_201630945_201632096(roses_gry, base_kernels[0], 'fill')
 roses_kern_b = MyCCorrelation_201630945_201632096(roses_gry, base_kernels[1], 'fill')
 print(f'Nivel de gris promedio de la imagen con kernel 3a: {np.sum(roses_kern_a) / np.size(roses_kern_a)}.')
-print(f'Nivel de gris promedio de la imagen con kernel 3b: {np.sum(roses_kern_b) / np.size(roses_kern_b)}.')
+print(f'Nivel de gris promedio de la imagen con kern el 3b: {np.sum(roses_kern_b) / np.size(roses_kern_b)}.')
 axes[0].set_title('Original')
 axes[0].imshow(roses_gry, cmap='gray')
 axes[0].axis('off')
