@@ -328,3 +328,5 @@ axes[1].set_title('Kernel 2')
 axes[1].axis('off')
 fig.show()
 fig.savefig('kernels.png')
+
+#%%
