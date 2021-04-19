@@ -11,8 +11,12 @@ def MyConnComp_201630945_201622695(binary_image, conn):
     image = np.asarray(binary_image, dtype=np.int_)
     if conn != 4 and conn != 8:
         raise Exception('Connectivity value must be 4 or 8.')
+    if np.ndim(image) > 2:
+        raise Exception(
+            f'Input must be either a binary vector or matrix '
+            f'(too many dimensions, expected 1 or 2, found {np.ndim(image)}).')
     b = np.asarray([[0, 1, 0], [1, 1, 1], [0, 1, 0]]) if conn == 4 else np.ones([3, 3], dtype=np.int_)
-    n, m, v = np.size(image, 0), np.size(image, 1) if np.ndim(image) > 1 else 1, int(np.sum(image))
+    n, m, v = np.size(image, 0), np.size(image, 1) if np.ndim(image) == 2 else 1, int(np.sum(image))
     if v == 0 or n == 0:
         return image, []
     # Single vector processing (one-dimensional).
@@ -40,9 +44,6 @@ def MyConnComp_201630945_201622695(binary_image, conn):
             pixel_labels.append(current)
         # print(labeled_image, pixel_labels)
         return labeled_image, pixel_labels
-    elif np.ndim(image) > 2:
-        raise Exception(
-            f'Input must be either a binary vector or matrix (too many dimensions, expected 1 or 2, found {np.ndim(image)}.')
     coord_to_vertex = {}
     # Base UnionFinder
     par = [-1] * v  # All pixels are isolated to begin with (they're their own component).
@@ -103,4 +104,5 @@ def MyConnComp_201630945_201622695(binary_image, conn):
 
 test = np.asarray([[1, 0, 0], [0, 0, 1], [1, 1, 0]])
 test = np.asarray([1, 0, 1, 1, 0, 1, 0, 0])
+test = np.zeros([3, 3, 3], dtype=np.int_)
 result, labels = MyConnComp_201630945_201622695(test, 8)
