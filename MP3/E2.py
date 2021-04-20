@@ -127,6 +127,7 @@ axes[1].set_title('Imagen con componentes separados')
 axes[1].axis('off')
 fig.savefig('fruits_binary_result.png')
 fig.show()
+input('Press enter to continue...')
 
 # %% Creating an image with the same result for 4 and 8 connectivity.
 smiley_size = 20
@@ -163,6 +164,7 @@ axes[2].set_title("\n".join(wrap('Componentes conectados smiley (conn = 8)', 17)
 axes[2].axis('off')
 fig.savefig('smiley.png')
 fig.show()
+input('Press enter to continue...')
 
 #%% Different structure
 maze_size = 20
@@ -190,3 +192,4 @@ axes[2].set_title("\n".join(wrap('Componentes conectados maze (conn = 8)', 17)))
 axes[2].axis('off')
 fig.savefig('maze.png')
 fig.show()
+input('Press enter to continue...')
