@@ -1,5 +1,9 @@
 # %% Packages
+import os.path
 import numpy as np
+import skimage.io as io
+import matplotlib.pyplot as plt
+from textwrap import wrap
 
 
 # %%
@@ -102,7 +106,87 @@ def MyConnComp_201630945_201622695(binary_image, conn):
     return labeled_image, pixel_labels
 
 
-test = np.asarray([[1, 0, 0], [0, 0, 1], [1, 1, 0]])
-test = np.asarray([1, 0, 1, 1, 0, 1, 0, 0])
-test = np.zeros([3, 3, 3], dtype=np.int_)
-result, labels = MyConnComp_201630945_201622695(test, 8)
+# %% Reading the fruit image and making a binarization.
+img = io.imread(os.path.join('.', 'fruits_binary.png'))
+for i in range(np.size(img, 0)):
+    for j in range(np.size(img, 1)):
+        if img[i, j] > 0:
+            img[i, j] = 1
+
+# %% Applying component extraction.
+res, labels = MyConnComp_201630945_201622695(img, 8)
+
+# %% Plotting the result with the original image.
+fig, axes = plt.subplots(1, 2)
+fig.suptitle('Extracción de componentes conectados para una imagen con frutas')
+axes[0].imshow(img, cmap='gray')
+axes[0].set_title('Imagen original')
+axes[0].axis('off')
+axes[1].imshow(res, cmap='gray')
+axes[1].set_title('Imagen con componentes separados')
+axes[1].axis('off')
+fig.savefig('fruits_binary_result.png')
+fig.show()
+
+# %% Creating an image with the same result for 4 and 8 connectivity.
+smiley_size = 20
+smiley = np.zeros([smiley_size, smiley_size], dtype=np.short)
+for i in range(smiley_size):
+    for j in range(smiley_size):
+        if i == 0 or i == smiley_size - 1 or j == 0 or j == smiley_size - 1:
+            smiley[i, j] = 1  # Border of the smiley face.
+eye_len = 4
+top_mouth = eye_len * 2
+for i in range(2, 2 + eye_len):
+    for j in range(2, 2 + eye_len):
+        smiley[i, j], smiley[i, smiley_size - j - 1] = 1, 1
+        smiley[i + top_mouth, j], smiley[i + top_mouth, smiley_size - j - 1] = 1, 1
+for i in range(2 + top_mouth + eye_len, 2 + 2 * top_mouth):
+    for j in range(2, smiley_size-2):
+        smiley[i, j] = 1
+
+# %% Results of smiley
+smiley_res_4, smiley_labels_4 = MyConnComp_201630945_201622695(smiley, 4)
+smiley_res_8, smiley_labels_8 = MyConnComp_201630945_201622695(smiley, 8)
+
+# %% Plotting smiley images
+fig, axes = plt.subplots(1, 3)
+fig.suptitle('Comparación de los resultados para Smiley con 4 y 8 conectividad.')
+axes[0].imshow(smiley, cmap='gray')
+axes[0].set_title('Smiley')
+axes[0].axis('off')
+axes[1].imshow(smiley_res_4, cmap='gray')
+axes[1].set_title("\n".join(wrap('Componentes conectados smiley (conn = 4)', 17)))
+axes[1].axis('off')
+axes[2].imshow(smiley_res_8, cmap='gray')
+axes[2].set_title("\n".join(wrap('Componentes conectados smiley (conn = 8)', 17)))
+axes[2].axis('off')
+fig.savefig('smiley.png')
+fig.show()
+
+#%% Different structure
+maze_size = 20
+maze = np.zeros([20, 20], dtype=np.short)
+for i in range(0, maze_size):
+    for j in range(i, maze_size - i):
+        if i % 2 == 0 and i != j and i != maze_size-j-1:
+            maze[i, j], maze[j, i], maze[maze_size - i - 1, j], maze[j, maze_size - i - 1] = 1, 1, 1, 1
+
+# %% Results of smiley
+maze_res_4, maze_labels_4 = MyConnComp_201630945_201622695(maze, 4)
+maze_res_8, maze_labels_8 = MyConnComp_201630945_201622695(maze, 8)
+
+# %% Plotting maze images
+fig, axes = plt.subplots(1, 3)
+fig.suptitle('Comparación de los resultados para Maze con 4 y 8 conectividad.')
+axes[0].imshow(maze, cmap='gray')
+axes[0].set_title('Maze')
+axes[0].axis('off')
+axes[1].imshow(maze_res_4, cmap='gray')
+axes[1].set_title("\n".join(wrap('Componentes conectados maze (conn = 4)', 17)))
+axes[1].axis('off')
+axes[2].imshow(maze_res_8, cmap='gray')
+axes[2].set_title("\n".join(wrap('Componentes conectados maze (conn = 8)', 17)))
+axes[2].axis('off')
+fig.savefig('maze.png')
+fig.show()
