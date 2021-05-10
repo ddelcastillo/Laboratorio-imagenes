@@ -178,9 +178,16 @@ if __name__ == '__main__':
     parameters = {'histogram_function': CatColorHistogram,
                   'space': 'LAB', 'transform_color_function': color.rgb2lab,
                   'bins': 3, 'k': 10,
-                  'name_model': 'model.joblib',
+                  'name_model': 'best_model_E1_201622695_201630945.joblib',
                   'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
-                  'val_descriptor_name': 'DDC_IM_val_descriptor.npy'}
+                  'val_descriptor_name': 'DDC_IM_val_descriptor.npy',
+                  # Based on the best result. Will be overwritten with training.
+                  'label_clusters': {'buildings': {'cluster': 1, 'count': 2},
+                                     'glacier': {'cluster': 2, 'count': 2},
+                                     'mountains': {'cluster': 7, 'count': 2},
+                                     'street': {'cluster': 3, 'count': 5},
+                                     'forest': {'cluster': 4, 'count': 4},
+                                     'sea': {'cluster': 5, 'count': 1}}}
 
     perform_train = False
     action = 'none'
