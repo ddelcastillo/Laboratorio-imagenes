@@ -6,7 +6,7 @@ from skimage import io
 from skimage import color
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
-from functions import JointColorHistogram
+from functions import JointColorHistogram, CatColorHistogram
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 
 
@@ -107,26 +107,27 @@ def validate(parameters, action):
 
 def print_results(conf_mat, precision, recall, f_score, parameters):
     # Confusion matrix print formatting (right justified).
+    n = np.size(conf_mat, 0)
     col_separator, row_separator = '|', '—'  # Row separator should be a single character.
-    cluster_size, padding = len(str(parameters['k'])), 1
+    cluster_size, padding = len(str(n)), 1
     len_col_sep, len_row_sep = len(col_separator), len(row_separator)
     cell_size = max(len(str(np.max(conf_mat))), cluster_size) + padding
-    row_sep = ' ' * abs(cell_size - len(str(parameters['k'])) + len_row_sep) + (
-            (cell_size + len_col_sep) * parameters['k'] + len_col_sep) * row_separator
+    row_sep = ' ' * abs(cell_size - len(str(n)) + len_row_sep) + (
+            (cell_size + len_col_sep) * n + len_col_sep) * row_separator
 
     title = ' Confusion matrix '
     print(row_separator * int(max(0, np.floor(len(row_sep) - len(title)) / 2)) + title + row_separator * int(
         np.ceil(max(0, len(row_sep) - len(title)) / 2)))
     print(row_sep)
     column_str = 'k' + ' ' * (cell_size - 1)  # Column headers.
-    for i in range(parameters['k']):
+    for i in range(n):
         column_str += ' ' * len_col_sep + ' ' * abs(cell_size - len(str(i))) + str(i)
     print(column_str)
     print(row_sep)
     # Printing each row with the values in the matrix.
-    for i in range(parameters['k']):
+    for i in range(np.size(conf_mat, 0)):
         row_str = str(i) + ' ' * abs(cell_size - len(str(i))) + col_separator
-        for j in range(parameters['k']):
+        for j in range(np.size(conf_mat, 1)):
             row_str += ' ' * abs(cell_size - len(str(conf_mat[i, j]))) + str(conf_mat[i, j]) + col_separator
         print(row_str)
     print(row_sep)
@@ -174,13 +175,14 @@ def _assign_labels(p_label_clusters, p_cluster_labels, p_cluster, p_label=None):
 
 
 if __name__ == '__main__':
-    parameters = {'histogram_function': JointColorHistogram,
-                  'space': 'HSV', 'transform_color_function': color.rgb2hsv,
-                  'bins': 5, 'k': 6,
-                  'name_model': 'model.joblib',
-                  'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
-                  'val_descriptor_name': 'DDC_IM_val_descriptor.npy'}
+    for i in range(6, 16):
+        parameters = {'histogram_function': JointColorHistogram,
+                      'space': 'HSV', 'transform_color_function': color.rgb2lab,
+                      'bins': 20, 'k': i,
+                      'name_model': 'model.joblib',
+                      'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
+                      'val_descriptor_name': 'DDC_IM_val_descriptor.npy'}
 
-    perform_train = True
-    action = 'save'
-    main(parameters=parameters, perform_train=perform_train, action=action)
+        perform_train = True
+        action = 'save'
+        main(parameters=parameters, perform_train=perform_train, action=action)
