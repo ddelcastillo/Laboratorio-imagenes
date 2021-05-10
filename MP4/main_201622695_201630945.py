@@ -74,7 +74,7 @@ def train(parameters, action):
     fig.tight_layout(pad=1)
     fig.show()
     fig.savefig('test_figure.png')
-    # input('Press enter to continue...')
+    input('Press enter to continue...')
 
 
 def validate(parameters, action):
@@ -175,14 +175,13 @@ def _assign_labels(p_label_clusters, p_cluster_labels, p_cluster, p_label=None):
 
 
 if __name__ == '__main__':
-    for i in range(6, 16):
-        parameters = {'histogram_function': JointColorHistogram,
-                      'space': 'HSV', 'transform_color_function': color.rgb2lab,
-                      'bins': 20, 'k': i,
-                      'name_model': 'model.joblib',
-                      'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
-                      'val_descriptor_name': 'DDC_IM_val_descriptor.npy'}
+    parameters = {'histogram_function': CatColorHistogram,
+                  'space': 'LAB', 'transform_color_function': color.rgb2lab,
+                  'bins': 3, 'k': 10,
+                  'name_model': 'model.joblib',
+                  'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
+                  'val_descriptor_name': 'DDC_IM_val_descriptor.npy'}
 
-        perform_train = True
-        action = 'save'
-        main(parameters=parameters, perform_train=perform_train, action=action)
+    perform_train = False
+    action = 'none'
+    main(parameters=parameters, perform_train=perform_train, action=action)
