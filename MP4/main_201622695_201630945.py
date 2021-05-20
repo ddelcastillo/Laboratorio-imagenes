@@ -6,6 +6,8 @@ from skimage import io
 from skimage import color
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+from scipy.signal import correlate2d
+from scipy.io import loadmat, savemat
 from functions import JointColorHistogram, CatColorHistogram
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 
@@ -174,6 +176,45 @@ def _assign_labels(p_label_clusters, p_cluster_labels, p_cluster, p_label=None):
             break
 
 
+def _elbow_rule(data, seed, max_k):
+    resp = []
+    for k in range(1, max_k+1):
+        print(f"Iteration {k}/{max_k}.")
+        model = KMeans(n_clusters=k, random_state=seed)
+        model.fit(data)
+        resp.append(model.inertia_)
+    fig, axs = plt.subplots()
+    fig.suptitle('Suma total de distancias cuadradas al centroide más\n cercano vs. número de centroides (k)')
+    axs.plot(range(1, max_k+1), resp, 'bo-')
+    axs.set_ylabel("Distorción")
+    axs.set_xlabel("k")
+    axs.grid("on")
+    fig.show()
+    input("Press enter to continue...")
+
+
+def calculateFilterResponse_201622695_201630945(img_gray, filters):
+    assert img_gray.ndim == 2, f"Image must be a gray image (2D, found {img_gray.ndim} dimensions)."
+    resp = np.zeros([img_gray.size, len(filters)])
+    for i, f in enumerate(filters):
+        resp[:, i] = correlate2d(img_gray, f, mode='same').flatten()
+    return resp
+
+
+def calculateTextonDictionary_201622695_201630945(images_train, filters, parameters):
+    if len(images_train) == 0:
+        return np.zeros(0)
+    # Code relies on concatenation instead of a pre-set sized matrix to allow flexible image sizes.
+    resp = np.zeros([0, len(filters)])
+    for img in images_train:
+        resp = np.concatenate((resp, calculateFilterResponse_201622695_201630945(img, filters)))
+    # K-means
+    seed = 42  # Seed for deterministic random centroid generation.
+    texton_model = KMeans(n_clusters=parameters['texton_k'], random_state=seed)
+    texton_model.fit(resp)
+    texton_dict = {'centroids': texton_model.cluster_centers_}
+    savemat(parameters['dictname'], texton_dict)
+
 if __name__ == '__main__':
     parameters = {'histogram_function': CatColorHistogram,
                   'space': 'LAB', 'transform_color_function': color.rgb2lab,
@@ -187,7 +228,11 @@ if __name__ == '__main__':
                                      'mountains': {'cluster': 7, 'count': 2},
                                      'street': {'cluster': 3, 'count': 5},
                                      'forest': {'cluster': 4, 'count': 4},
-                                     'sea': {'cluster': 5, 'count': 1}}}
+                                     'sea': {'cluster': 5, 'count': 1}},
+                  # Based on testing for texton dictionary.
+                  'texton_k': 6,
+                  'dict_name': 'textons_model_201622695_201630945.mat'
+                  }
 
     perform_train = False
     action = 'none'
