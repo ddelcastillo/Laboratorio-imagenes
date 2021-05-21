@@ -3,6 +3,7 @@ import glob
 import joblib
 import numpy as np
 from skimage import io
+from sklearn import svm
 from skimage import color
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
@@ -12,71 +13,51 @@ from functions import JointColorHistogram, CatColorHistogram
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 
 
-def calculate_descriptors(data, parameters):
-    if parameters['space'] != 'RGB':
-        data = list(map(parameters['transform_color_function'], data))
-    bins = [parameters['bins']] * len(data)
-    histograms = list(map(parameters['histogram_function'], data, bins))
-    descriptor_matrix = np.array(histograms)
-    descriptor_matrix = descriptor_matrix.reshape((len(data), np.prod(descriptor_matrix.shape[1:])))
-    return descriptor_matrix
+def calculate_descriptors(data, parameters, calculate_dict):
+    descriptor_matrix = np.zeros([len(data), parameters['texton_k']])
+    if calculate_dict:
+        filters_bank = loadmat(os.path.join('data_mp4', 'filterbank.mat'))['filterbank']
+        filters_list = [filters_bank[:, :, i] for i in range(np.shape(filters_bank)[2])]
+        gray_images = list(map(color.rgb2gray, data))
+        calculateTextonDictionary_201622695_201630945(gray_images, filters_list, parameters)
+    else:
+        centroids = loadmat(parameters['dict_name'])['centroids']
+        for i, img in enumerate(data):
+            img_gray = color.rgb2gray(img)
+            resp = calculateTextonHistogram_201622695_201630945(img_gray, centroids)
+            descriptor_matrix[i, :] = resp
+    return descriptor_matrix if not calculate_dict else None
 
 
 def train(parameters, action):
     data_train = os.path.join('data_mp4', 'scene_dataset', 'train', '*.jpg')
     images_train = list(map(io.imread, glob.glob(data_train)))
     if action == 'save':
-        descriptors = calculate_descriptors(images_train, parameters)
         # Saves the training descriptors into the 'train_descriptor_name' specified .npy file.
+        calculate_descriptors(images_train, parameters, True)
+        descriptors = calculate_descriptors(images_train, parameters, False)
         np.save(parameters['train_descriptor_name'], descriptors)
     else:
         pass  # Temporary dummy code for indentation.
     # Loads descriptors matrix.
     descriptors = np.load(parameters['train_descriptor_name'])
-    seed = 42  # Seed for deterministic random centroid generation.
-    model = KMeans(n_clusters=parameters['k'], random_state=seed)
-    model.fit(descriptors)
-    # Persisting the model.
-    joblib.dump(model, parameters['name_model'])
-    # Gets the class labels from the images, counts them, and counts the number
-    # of labels per cluster, then it stores it in cluster_labels (label counters per each cluster).
-    y_hat = model.predict(descriptors)
-    clusters, labels = set(np.unique(y_hat)), set()
-    cluster_labels, class_counter = {element: {} for element in clusters}, {}
+    y_hat, labels = [], set()
+    class_to_number = {}
     for index, file in enumerate(os.listdir(os.path.join('data_mp4', 'scene_dataset', 'train'))):
         img_class = file.split('_')[0]
         if img_class not in labels:
+            class_to_number[img_class] = len(labels)
+            y_hat.append(len(labels))
             labels.add(img_class)
-            class_counter[img_class] = 1
-            for cluster in cluster_labels:
-                cluster_labels[cluster][img_class] = 0
         else:
-            cluster_labels[y_hat[index]][img_class] += 1
-            class_counter[img_class] += 1
-    # k must be equal or larger than the number of classes for the logic to work
-    assert parameters['k'] >= len(labels), "The number of clusters must be equal or higher than the number of classes."
-    # Ordering the assigned labels in ascending order for each cluster.
-    for cluster in cluster_labels:
-        cluster_labels[cluster] = dict(sorted(cluster_labels[cluster].items(), key=lambda item: item[1], reverse=True))
-    # This dictionary will store the assigned clusters to each label.
-    label_clusters = {}
-    for cluster in cluster_labels:
-        _assign_labels(label_clusters, cluster_labels, cluster)
-    parameters['label_clusters'] = label_clusters
-    # Plot of the cluster assignment for each image.
-    fig, axs = plt.subplots(len(class_counter), max(class_counter.values()))
-    title = 'Cluster asignado a cada imagen por clase (una clase por fila)'
-    fig.suptitle(title)
-    classes = list(class_counter.keys())
-    for i in range(len(class_counter)):
-        for j, image in enumerate(glob.glob(os.path.join('data_mp4', 'scene_dataset', 'train', classes[i] + '*.jpg'))):
-            axs[i, j].imshow(io.imread(image))
-            axs[i, j].axis('off')
-            axs[i, j].set_title(y_hat[i * len(class_counter) + j])
-    fig.tight_layout(pad=1)
-    fig.show()
-    fig.savefig('test_figure.png')
-    input('Press enter to continue...')
+            y_hat.append(class_to_number[img_class])
+    parameters['class_to_number']: class_to_number
+    seed = 42  # Seed for deterministic random centroid generation.
+    # model = KMeans(n_clusters=parameters['k'], random_state=seed)
+    model = svm.SVC(kernel=parameters['kernel'])
+    model.fit(descriptors, y_hat)
+    # Persisting the model.
+    joblib.dump(model, parameters['name_model'])
 
 
 def validate(parameters, action):
@@ -85,7 +66,7 @@ def validate(parameters, action):
     if action == 'load':
         descriptors = np.load(parameters['val_descriptor_name'])
     else:
-        descriptors = calculate_descriptors(images_val, parameters)
+        descriptors = calculate_descriptors(images_val, parameters, False)
         if action == 'save':
             # Saves the validation descriptors into the 'val_descriptor_name' specified .npy file.
             np.save(parameters['val_descriptor_name'], descriptors)
@@ -94,10 +75,9 @@ def validate(parameters, action):
     y_hat = model.predict(descriptors)
     # Obtaining the real cluster values for the validation labels.
     y_real = []
-    label_clusters = parameters['label_clusters']
+    class_to_number = parameters['class_to_number']
     for index, file in enumerate(os.listdir(os.path.join('data_mp4', 'scene_dataset', 'val'))):
-        img_class = file.split('_')[0]
-        y_real.append(label_clusters[img_class]['cluster'])
+        y_real.append(class_to_number[file.split('_')[0]])
     setting, y_real = 'micro', np.asarray(y_real)
     parameters['setting'] = setting
     conf_mat = confusion_matrix(y_real, y_hat)
@@ -137,11 +117,6 @@ def print_results(conf_mat, precision, recall, f_score, parameters):
     print(f"Recall score ({parameters['setting']}): {'{:.3f}'.format(recall)}.")
     print(f"F score ({parameters['setting']}): {'{:.3f}'.format(f_score)}.")
     print(row_sep)
-    print(f"Color transformation function: {str(parameters['transform_color_function']).split(' ')[1]}")
-    print(f"Histogram function: {str(parameters['histogram_function']).split(' ')[1]}")
-    print(f"Number of cluster (k): {parameters['k']}")
-    print(f"Number of bins: {parameters['bins']}")
-    print(f"Color space: {parameters['space']}")
 
 
 def main(parameters, perform_train, action):
@@ -151,41 +126,18 @@ def main(parameters, perform_train, action):
     print_results(conf_mat, precision, recall, f_score, parameters)
 
 
-# Modifies the p_label_clusters reference to store the cluster assigned to a certain label.
-# The logic behind the method consists of assigning to a particular label the cluster which has a higher count.
-def _assign_labels(p_label_clusters, p_cluster_labels, p_cluster, p_label=None):
-    finished, i = False, 0
-    label_counts = list(p_cluster_labels[p_cluster].keys())
-    while not finished:
-        label, count = label_counts[i], p_cluster_labels[p_cluster][label_counts[i]]
-        if label not in p_label_clusters:
-            p_label_clusters[label], finished = {'cluster': p_cluster, 'count': count}, True
-        else:
-            if p_label is None or (p_label is not None and p_label != label):
-                if count > p_label_clusters[label]['count']:
-                    temp = p_label_clusters[label]
-                    p_label_clusters[label], finished = {'cluster': p_cluster, 'count': count}, True
-                    # Re-assigns the newly assigned cluster
-                    _assign_labels(p_label_clusters, p_cluster_labels, temp['cluster'])
-                else:
-                    i += 1
-            else:
-                i += 1
-        # No better option left for the cluster.
-        if i == len(label_counts):
-            break
-
-
+# Runs each KMeans with the given seed and tests for [1, k_max] and plots the result
+# to determine the optimal value for k to use for the texton dictionary result.
 def _elbow_rule(data, seed, max_k):
     resp = []
-    for k in range(1, max_k+1):
+    for k in range(1, max_k + 1):
         print(f"Iteration {k}/{max_k}.")
         model = KMeans(n_clusters=k, random_state=seed)
         model.fit(data)
         resp.append(model.inertia_)
     fig, axs = plt.subplots()
     fig.suptitle('Suma total de distancias cuadradas al centroide más\n cercano vs. número de centroides (k)')
-    axs.plot(range(1, max_k+1), resp, 'bo-')
+    axs.plot(range(1, max_k + 1), resp, 'bo-')
     axs.set_ylabel("Distorción")
     axs.set_xlabel("k")
     axs.grid("on")
@@ -193,6 +145,8 @@ def _elbow_rule(data, seed, max_k):
     input("Press enter to continue...")
 
 
+# Calculates the filter response through cross-correlation of the image with the list of filters.
+# Flatten the result and stores it in a (m x n) x #filters matrix (one row per pixel, each column a filter response).
 def calculateFilterResponse_201622695_201630945(img_gray, filters):
     assert img_gray.ndim == 2, f"Image must be a gray image (2D, found {img_gray.ndim} dimensions)."
     resp = np.zeros([img_gray.size, len(filters)])
@@ -201,6 +155,8 @@ def calculateFilterResponse_201622695_201630945(img_gray, filters):
     return resp
 
 
+# Calculates the texton dictionary for the given list of images with the given list of filters.
+# It stores the texton dictionary with respect to the assigned parameters name.
 def calculateTextonDictionary_201622695_201630945(images_train, filters, parameters):
     if len(images_train) == 0:
         return np.zeros(0)
@@ -213,13 +169,36 @@ def calculateTextonDictionary_201622695_201630945(images_train, filters, paramet
     texton_model = KMeans(n_clusters=parameters['texton_k'], random_state=seed)
     texton_model.fit(resp)
     texton_dict = {'centroids': texton_model.cluster_centers_}
-    savemat(parameters['dictname'], texton_dict)
+    savemat(parameters['dict_name'], texton_dict)
+
+
+# Finds the normalized histogram for the image's response to the filters given the centroids dictionary.
+# Returns the normalized texton histogram for the image (with respect to filters) with the given centroids.
+def calculateTextonHistogram_201622695_201630945(img_gray, centroids):
+    assert img_gray.ndim == 2, f"Image must be a gray image (2D, found {img_gray.ndim} dimensions)."
+    n, m = np.size(img_gray, 0), np.size(img_gray, 1)
+    filters_bank = loadmat(os.path.join('data_mp4', 'filterbank.mat'))['filterbank']
+    filters_list = [filters_bank[:, :, i] for i in range(np.shape(filters_bank)[2])]
+    filter_response = calculateFilterResponse_201622695_201630945(img_gray, filters_list).reshape(
+        (n, m, len(filters_list)))
+    image_centroids = np.zeros([n, m])
+    # Goes through each pixel and finds the centroid closer to the pixel's filter response.
+    # It assigns the centroid, then calculated the histogram (one bin per texton).
+    for i in range(n):
+        for j in range(m):
+            centroid, distance = -1, np.inf
+            for ind, k in enumerate(centroids):
+                temp_distance = np.linalg.norm(filter_response[i, j, :] - k)
+                if temp_distance < distance:
+                    centroid, distance = ind, temp_distance
+            image_centroids[i, j] = centroid
+    hist = np.histogram(image_centroids, bins=len(centroids))
+    return hist[0] / np.sum(hist[0])  # Normalized histogram
+
 
 if __name__ == '__main__':
-    parameters = {'histogram_function': CatColorHistogram,
-                  'space': 'LAB', 'transform_color_function': color.rgb2lab,
-                  'bins': 3, 'k': 10,
-                  'name_model': 'best_model_E1_201622695_201630945.joblib',
+    parameters = {
+                  'name_model': 'final_model_201622695_201630945.joblib',
                   'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
                   'val_descriptor_name': 'DDC_IM_val_descriptor.npy',
                   # Based on the best result. Will be overwritten with training.
@@ -231,7 +210,9 @@ if __name__ == '__main__':
                                      'sea': {'cluster': 5, 'count': 1}},
                   # Based on testing for texton dictionary.
                   'texton_k': 6,
-                  'dict_name': 'textons_model_201622695_201630945.mat'
+                  'dict_name': 'textons_model_201622695_201630945.mat',
+                  'kernel': 'rbf',
+                  'class_to_number': {'buildings': 0, 'forest': 1, 'glacier': 2, 'mountains': 3, 'sea': 4, 'street': 5}
                   }
 
     perform_train = False

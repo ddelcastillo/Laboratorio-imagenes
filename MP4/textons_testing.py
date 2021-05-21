@@ -37,27 +37,27 @@ def calculateTextonDictionary_201622695_201630945(images_train, filters, paramet
     texton_model = KMeans(n_clusters=parameters['texton_k'], random_state=seed)
     texton_model.fit(resp)
     texton_dict = {'centroids': texton_model.cluster_centers_}
-    savemat(parameters['dictname'], texton_dict)
-    return resp
+    savemat(parameters['dict_name'], texton_dict)
 
 
 # %%
 def _elbow_rule(data, seed, max_k):
     resp = []
-    for k in range(1, max_k+1):
+    for k in range(1, max_k + 1):
         print(f"Iteration {k}/{max_k}...")
         model = KMeans(n_clusters=k, random_state=seed)
         model.fit(data)
         resp.append(model.inertia_)
     fig, axs = plt.subplots()
     fig.suptitle('Suma total de distancias cuadradas al centroide más\n cercano vs. número de centroides (k)')
-    axs.plot(range(1, max_k+1), resp, 'bo-')
+    axs.plot(range(1, max_k + 1), resp, 'bo-')
     axs.set_ylabel("Distorción")
     axs.set_xlabel("k")
     axs.grid("on")
     fig.show()
     # input("Press enter to continue...")
     return resp
+
 
 # %%
 data_train = os.path.join('data_mp4', 'scene_dataset', 'train', '*.jpg')
@@ -83,7 +83,7 @@ np.save("inertia_results.npy", inertia_values)
 fig, axs = plt.subplots()
 axs.plot(range(1, 30), inertia_values, 'bo-')
 axs.plot(6, inertia_values[5], 'ro')
-axs.annotate(text="k = 6", xy=(6, inertia_values[5]), xytext=(40,20), textcoords='offset points', ha='center',
+axs.annotate(text="k = 6", xy=(6, inertia_values[5]), xytext=(40, 20), textcoords='offset points', ha='center',
              va='bottom',
              bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.3),
              arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=-0.5',
@@ -103,3 +103,92 @@ savemat("textons_model.mat", {'centroids': model.cluster_centers_})
 centroids = loadmat("textons_model.mat")['centroids']
 # %% Testing elbow method call
 inertia_values = _elbow_rule(filter_response, 42, 2)
+
+
+# %%
+def calculateTextonHistogram_201622695_201630945(img_gray, centroids):
+    assert img_gray.ndim == 2, f"Image must be a gray image (2D, found {img_gray.ndim} dimensions)."
+    n, m = np.size(img_gray, 0), np.size(img_gray, 1)
+    filters_bank = loadmat(os.path.join('data_mp4', 'filterbank.mat'))['filterbank']
+    filters_list = [filters_bank[:, :, i] for i in range(np.shape(filters_bank)[2])]
+    filter_response = calculateFilterResponse_201622695_201630945(img_gray, filters_list).reshape(
+        (n, m, len(filters_list)))
+    image_centroids = np.zeros([n, m])
+    # Goes through each pixel and finds the centroid closer to the pixel's filter response.
+    # It assigns the centroid, then calculated the histogram (one bin per texton).
+    for i in range(n):
+        for j in range(m):
+            centroid, distance = -1, np.inf
+            for ind, k in enumerate(centroids):
+                temp = np.linalg.norm(filter_response[i, j, :] - k)
+                if temp < distance:
+                    centroid, distance = ind, temp
+            image_centroids[i, j] = centroid
+    hist = np.histogram(image_centroids, bins=len(centroids))
+    return hist[0] / np.sum(hist[0])  # Normalized histogram
+
+
+# %% Test response
+test_histogram = calculateTextonHistogram_201622695_201630945(test_image, centroids)
+
+# %%
+parameters = {'histogram_function': "",
+              'space': 'LAB', 'transform_color_function': color.rgb2lab,
+              'bins': 3, 'k': 10,
+              'name_model': 'best_model_E1_201622695_201630945.joblib',
+              'train_descriptor_name': 'DDC_IM_train_descriptor.npy',
+              'val_descriptor_name': 'DDC_IM_val_descriptor.npy',
+              # Based on the best result. Will be overwritten with training.
+              'label_clusters': {'buildings': {'cluster': 1, 'count': 2},
+                                 'glacier': {'cluster': 2, 'count': 2},
+                                 'mountains': {'cluster': 7, 'count': 2},
+                                 'street': {'cluster': 3, 'count': 5},
+                                 'forest': {'cluster': 4, 'count': 4},
+                                 'sea': {'cluster': 5, 'count': 1}},
+              # Based on testing for texton dictionary.
+              'texton_k': 6,
+              'dict_name': 'textons_model_201622695_201630945.mat'
+              }
+
+
+# %%
+def calculate_descriptors(data, parameters, calculate_dict):
+    # if parameters['space'] != 'RGB':
+    #     data = list(map(parameters['transform_color_function'], data))
+    # bins = [parameters['bins']] * len(data)
+    # histograms = list(map(parameters['histogram_function'], data, bins))
+    # descriptor_matrix = np.array(histograms)
+    # descriptor_matrix = descriptor_matrix.reshape((len(data), np.prod(descriptor_matrix.shape[1:])))
+    descriptor_matrix = np.zeros([len(data), parameters['texton_k']])
+    if calculate_dict:
+        filters_bank = loadmat(os.path.join('data_mp4', 'filterbank.mat'))['filterbank']
+        filters_list = [filters_bank[:, :, i] for i in range(np.shape(filters_bank)[2])]
+        gray_images = list(map(color.rgb2gray, data))
+        calculateTextonDictionary_201622695_201630945(gray_images, filters_list, parameters)
+    else:
+        centroids = loadmat(parameters['dict_name'])['centroids']
+        for i, img in enumerate(data):
+            img_gray = color.rgb2gray(img)
+            resp = calculateTextonHistogram_201622695_201630945(img_gray, centroids)
+            descriptor_matrix[i, :] = resp
+    return descriptor_matrix
+
+
+# %%
+data_train = os.path.join('data_mp4', 'scene_dataset', 'train', '*.jpg')
+images_train = list(map(io.imread, glob.glob(data_train)))
+# %%
+calculate_descriptors(images_train, parameters, True)
+# %%
+descriptors = calculate_descriptors(images_train, parameters, False)
+# %%
+y_hat, labels = [], set()
+class_to_number = {}
+for index, file in enumerate(os.listdir(os.path.join('data_mp4', 'scene_dataset', 'train'))):
+    img_class = file.split('_')[0]
+    if img_class not in labels:
+        class_to_number[img_class] = len(labels)
+        y_hat.append(len(labels))
+        labels.add(img_class)
+    else:
+        y_hat.append(class_to_number[img_class])
